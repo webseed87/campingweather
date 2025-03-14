@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle, TextStyle, Image, ImageStyle, Platform } from 'react-native';
 import { CampingTip } from '../../types/weather';
 import campingTipIcons from '../../constants/campingTipIcons';
 import useCampingWind from '../../hooks/useCampingWind';
 import { DailyWeatherData } from '../../types/weather';
+import { Colors } from '@/constants/Colors';
 
 interface WindTipProps {
   dayData: DailyWeatherData;
@@ -11,7 +12,7 @@ interface WindTipProps {
 
 interface Styles {
   tipCard: ViewStyle;
-  tipIcon: TextStyle;
+  tipIcon: ImageStyle;
   tipContent: ViewStyle;
   tipTitle: TextStyle;
   tipMessage: TextStyle;
@@ -24,7 +25,7 @@ export const WindTip: React.FC<WindTipProps> = ({ dayData }) => {
   if (isLoading || !dayData) {
     return (
       <View style={styles.tipCard}>
-        <Text style={styles.tipIcon}>{campingTipIcons.wind.moderate}</Text>
+        <Image source={campingTipIcons.wind.moderate} style={styles.tipIcon} />
         <View style={styles.tipContent}>
           <Text style={styles.tipTitle}>풍속 정보 로딩 중...</Text>
           <Text style={styles.tipMessage}>잠시만 기다려주세요.</Text>
@@ -47,26 +48,26 @@ export const WindTip: React.FC<WindTipProps> = ({ dayData }) => {
       windTip = {
         icon: campingTipIcons.wind.strong,
         title: `바람이 매우 강합니다 (${windSpeedValue}m/s)`,
-        message: '캠핑하기 위험한 날씨예요!! 텐트 설치를 피하고 안전한 장소를 찾으세요.',
-        style: { backgroundColor: '#ffcccc', padding: 8, borderRadius: 4 } // 연한 빨간색 배경
+        message: '캠핑하기 위험한 날씨예요!! 텐트 설치를 피하세요!.',
+        style: { backgroundColor: '#ffcccc' } // 연한 빨간색 배경
       };
-    } else if (windSpeedValue >= 5) {
+    } else if (windSpeedValue >= 4) {
       windTip = {
         icon: campingTipIcons.wind.strong,
         title: `바람이 강합니다 (${windSpeedValue}m/s)`,
         message: '텐트 팩과 스트링을 단단히 고정하세요.',
         style: {}
       };
-    } else if (windSpeedValue < 2) {
+    } else if (windSpeedValue < 3) {
       windTip = {
-        icon: campingTipIcons.wind.weak,
+        icon: campingTipIcons.wind.moderate,
         title: `바람이 약합니다 (${windSpeedValue}m/s)`,
-        message: '텐트 설치에 문제가 없을 것입니다.',
+        message: '텐트 설치에 문제가 없어요.',
         style: {}
       };
     } else {
       windTip = {
-        icon: campingTipIcons.wind.moderate,
+        icon: campingTipIcons.wind.weak,
         title: `바람이 적당합니다 (${windSpeedValue}m/s)`,
         message: '캠핑 하기 좋은 날씨예요.',
         style: {}
@@ -76,7 +77,7 @@ export const WindTip: React.FC<WindTipProps> = ({ dayData }) => {
 
   return (
     <View style={[styles.tipCard, windTip.style]}>
-      <Text style={styles.tipIcon}>{windTip.icon}</Text>
+      <Image source={windTip.icon} style={styles.tipIcon} />
       <View style={styles.tipContent}>
         <Text style={styles.tipTitle}>{windTip.title}</Text>
         <Text style={styles.tipMessage}>{windTip.message}</Text>
@@ -88,18 +89,15 @@ export const WindTip: React.FC<WindTipProps> = ({ dayData }) => {
 const styles = StyleSheet.create<Styles>({
   tipCard: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 16,
+    backgroundColor: Colors.whitebox,
+    borderRadius: 10,
+    padding: 15,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.5,
-    elevation: 2,
+ 
   },
   tipIcon: {
-    fontSize: 36,
+    width: 36,
+    height: 36,
     marginRight: 16,
   },
   tipContent: {
@@ -107,12 +105,14 @@ const styles = StyleSheet.create<Styles>({
   },
   tipTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    color: Colors.gary600,
+    fontFamily: Platform.OS === 'ios' ? "SUIT-bold" : "SUIT-Bold",
     marginBottom: 4,
   },
   tipMessage: {
     fontSize: 14,
-    color: '#666',
+    color: Colors.gary500,
+    fontFamily: Platform.OS === 'ios' ? "SUIT-regular" : "SUIT-Regular",
   },
 });
 

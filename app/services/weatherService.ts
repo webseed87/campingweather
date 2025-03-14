@@ -1,8 +1,8 @@
 import axios from 'axios';
-import { API_KEY } from '@env';
+import { ProcessedWeatherData } from '../types/weather';
 
 // 기상청 API 인증키
-const serviceKey = API_KEY;
+const serviceKey = process.env.EXPO_PUBLIC_API_KEY || '';
 const BASE_URL = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst';
 
 // 날짜 포맷팅 함수 (YYYYMMDD)
@@ -92,147 +92,191 @@ export const weatherCodes = {
   }
 };
 
-// 기상청 API 호출 함수
-export const fetchWeatherForecast = async (nx: number, ny: number) => {
+/**
+ * 단기예보 발표일자와 발표시각 계산 함수
+ * @returns 발표일자와 발표시각
+ */
+export const getBaseDateTime = () => {
+  // 현재 시간 기준으로 발표 시간 계산
+  const today = new Date();
+  const date = formatDate(today);
+  
+  // 발표 시간 계산 (0200, 0500, 0800, 1100, 1400, 1700, 2000, 2300)
+  const hour = today.getHours();
+  const minute = today.getMinutes();
+  
+  // 가장 최신 발표 시간 선택
+  let time;
+  
+  if (hour < 2 || (hour === 2 && minute < 10)) {
+    // 0시~2시 10분: 전날 23시 발표 데이터
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    return {
+      date: formatDate(yesterday),
+      time: '2300'
+    };
+  } else if (hour < 5 || (hour === 5 && minute < 10)) {
+    time = '0200';
+  } else if (hour < 8 || (hour === 8 && minute < 10)) {
+    time = '0500';
+  } else if (hour < 11 || (hour === 11 && minute < 10)) {
+    time = '0800';
+  } else if (hour < 14 || (hour === 14 && minute < 10)) {
+    time = '1100';
+  } else if (hour < 17 || (hour === 17 && minute < 10)) {
+    time = '1400';
+  } else if (hour < 20 || (hour === 20 && minute < 10)) {
+    time = '1700';
+  } else if (hour < 23 || (hour === 23 && minute < 10)) {
+    time = '2000';
+  } else {
+    time = '2300';
+  }
+  
+  return { date, time };
+};
+
+/**
+ * 단기예보 조회 함수
+ * @param nx 예보지점 X 좌표
+ * @param ny 예보지점 Y 좌표
+ * @param baseDate 발표일자
+ * @param baseTime 발표시각
+ * @returns 단기예보 데이터
+ */
+export const fetchWeatherForecast = async (
+  nx: string,
+  ny: string,
+  baseDate?: string,
+  baseTime?: string
+) => {
   try {
-    // 현재 시간 기준으로 발표 시간 계산
-    const today = new Date();
+    // 현재 시간 기준으로 발표일자와 발표시각 계산
+    const { date, time } = getBaseDateTime();
+    const finalBaseDate = baseDate || date;
+    const finalBaseTime = baseTime || time;
+
+    console.log(`단기예보 API 호출 정보: 발표일자=${finalBaseDate}, 발표시각=${finalBaseTime}, 좌표=(${nx}, ${ny})`);
     
-    // 기본 날짜와 시간 설정
-    let baseDate = formatDate(today);
+    // API 호출 URL 구성
+    const url = `${BASE_URL}?serviceKey=${encodeURIComponent(serviceKey)}&numOfRows=1000&pageNo=1&dataType=JSON&base_date=${finalBaseDate}&base_time=${finalBaseTime}&nx=${nx}&ny=${ny}`;
+    console.log('단기예보 API 호출 URL:', url);
     
-    // 발표 시간 계산 (0200, 0500, 0800, 1100, 1400, 1700, 2000, 2300)
-    const hour = today.getHours();
-    const minute = today.getMinutes();
+    // 최대 3번 재시도
+    let retryCount = 0;
+    const maxRetries = 3;
+    let lastError;
     
-    // 가장 최신 발표 시간 선택
-    let baseTime;
-    if (hour < 2 || (hour === 2 && minute < 10)) {
-      // 0시~2시 10분: 전날 23시 발표 데이터
-      const yesterday = new Date(today);
-      yesterday.setDate(today.getDate() - 1);
-      baseDate = formatDate(yesterday);
-      baseTime = '2300';
-    } else if (hour < 5 || (hour === 5 && minute < 10)) {
-      baseTime = '0200';
-    } else if (hour < 8 || (hour === 8 && minute < 10)) {
-      baseTime = '0500';
-    } else if (hour < 11 || (hour === 11 && minute < 10)) {
-      baseTime = '0800';
-    } else if (hour < 14 || (hour === 14 && minute < 10)) {
-      baseTime = '1100';
-    } else if (hour < 17 || (hour === 17 && minute < 10)) {
-      baseTime = '1400';
-    } else if (hour < 20 || (hour === 20 && minute < 10)) {
-      baseTime = '1700';
-    } else if (hour < 23 || (hour === 23 && minute < 10)) {
-      baseTime = '2000';
-    } else {
-      baseTime = '2300';
-    }
-    
-    console.log(`API 호출 정보: 날짜=${baseDate}, 시간=${baseTime}, nx=${nx}, ny=${ny}`);
-    
-    // API 호출 URL 직접 구성 (인코딩 문제 해결)
-    const url = `${BASE_URL}?serviceKey=${encodeURIComponent(serviceKey)}&numOfRows=1000&pageNo=1&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${nx}&ny=${ny}`;
-    console.log('API 호출 URL:', url);
-    
-    // API 호출
-    const response = await axios.get(url, {
-      timeout: 15000 // 15초 타임아웃 설정
-    });
-    
-    console.log('API 응답 상태:', response.status);
-    
-    // 응답 데이터 확인
-    if (response.data && response.data.response) {
-      const header = response.data.response.header;
-      console.log('API 응답 코드:', header.resultCode, '메시지:', header.resultMsg);
-      
-      if (header.resultCode === '00') {
-        const items = response.data.response.body.items.item;
-        console.log(`API 응답 데이터 개수: ${items.length}개`);
-        
-        if (!items || items.length === 0) {
-          console.error('API 응답에 데이터가 없습니다.');
-          
-          // 다른 발표 시간으로 재시도
-          if (baseTime === '0200') {
-            console.log('0200 발표 데이터가 없어 0500 데이터로 재시도합니다.');
-            baseTime = '0500';
-            const retryUrl = `${BASE_URL}?serviceKey=${encodeURIComponent(serviceKey)}&numOfRows=1000&pageNo=1&dataType=JSON&base_date=${baseDate}&base_time=0500&nx=${nx}&ny=${ny}`;
-            const retryResponse = await axios.get(retryUrl, {
-              timeout: 15000
-            });
-            
-            if (retryResponse.data && retryResponse.data.response && 
-                retryResponse.data.response.header.resultCode === '00' &&
-                retryResponse.data.response.body.items.item.length > 0) {
-              return retryResponse.data.response.body.items.item;
-            }
+    while (retryCount < maxRetries) {
+      try {
+        // API 호출
+        const response = await axios.get(url, {
+          timeout: 30000, // 30초 타임아웃 설정 (증가)
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
           }
-          
-          throw new Error('날씨 데이터가 없습니다.');
-        }
-        
-        // 날짜별 데이터 확인
-        const dates = [...new Set(items.map((item: any) => item.fcstDate))];
-        console.log('예보 날짜:', dates);
-        
-        // 오늘 날짜 데이터가 있는지 확인
-        const todayDateStr = formatDate(today);
-        if (!dates.includes(todayDateStr)) {
-          console.warn(`오늘(${todayDateStr}) 날씨 데이터가 없습니다.`);
-        }
-        
-        // 데이터 카테고리 확인
-        const categories = new Set();
-        items.slice(0, 100).forEach((item: any) => {
-          categories.add(item.category);
         });
-        console.log('데이터 카테고리:', Array.from(categories).join(', '));
         
-        // TMN/TMX 데이터 확인
-        const tmnData = items.filter((item: any) => item.category === 'TMN');
-        const tmxData = items.filter((item: any) => item.category === 'TMX');
-        console.log(`TMN(최저기온) 데이터 개수: ${tmnData.length}`);
-        console.log(`TMX(최고기온) 데이터 개수: ${tmxData.length}`);
+        console.log('단기예보 API 응답 상태:', response.status);
         
-        return items;
-      } else {
-        console.error(`API 오류: ${header.resultCode} - ${header.resultMsg}`);
-        throw new Error(`API 오류: ${header.resultMsg}`);
+        // 응답 데이터 확인
+        if (response.data && response.data.response) {
+          const header = response.data.response.header;
+          console.log('단기예보 API 응답 코드:', header.resultCode, '메시지:', header.resultMsg);
+          
+          if (header.resultCode === '00') {
+            const items = response.data.response.body.items.item;
+            
+            if (!items || items.length === 0) {
+              console.error('단기예보 API 응답에 데이터가 없습니다.');
+              throw new Error('단기예보 데이터가 없습니다.');
+            }
+            
+            return items;
+          } else {
+            console.error(`단기예보 API 오류: ${header.resultCode} - ${header.resultMsg}`);
+            throw new Error(`단기예보 API 오류: ${header.resultMsg}`);
+          }
+        } else {
+          console.error('단기예보 API 응답 형식이 올바르지 않습니다.');
+          console.error('응답 데이터:', JSON.stringify(response.data, null, 2));
+          throw new Error('단기예보 API 응답 형식이 올바르지 않습니다.');
+        }
+      } catch (error: any) {
+        lastError = error;
+        retryCount++;
+        
+        if (retryCount < maxRetries) {
+          console.log(`단기예보 API 호출 실패 (${retryCount}/${maxRetries}), 재시도 중...`);
+          // 지수 백오프 (1초, 2초, 4초...)
+          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
+        }
       }
-    } else {
-      console.error('API 응답 형식이 올바르지 않습니다.');
-      console.error('응답 데이터:', JSON.stringify(response.data, null, 2));
-      throw new Error('API 응답 형식이 올바르지 않습니다.');
     }
+    
+    // 모든 재시도 실패
+    console.error('단기예보 API 호출 오류 (최대 재시도 횟수 초과):', lastError?.message);
+    if (lastError?.response) {
+      console.error('응답 데이터:', lastError.response.data);
+      console.error('응답 상태:', lastError.response.status);
+    }
+    
+    // 기본 데이터 반환 (앱 크래시 방지)
+    return [];
   } catch (error: any) {
-    console.error('날씨 API 호출 오류:', error.message);
+    console.error('단기예보 API 호출 오류:', error.message);
     if (error.response) {
       console.error('응답 데이터:', error.response.data);
       console.error('응답 상태:', error.response.status);
     }
-    throw error;
+    
+    // 기본 데이터 반환 (앱 크래시 방지)
+    return [];
   }
 };
 
-// 날씨 데이터 가공 함수 - 하루 단위로 그룹화
-export const processWeatherData = (data: any[]) => {
-  // 데이터가 없는 경우 빈 배열 반환
+/**
+ * 날씨 데이터 처리 함수
+ * @param data 원본 날씨 데이터
+ * @param midTermData 중기예보 데이터 (선택적)
+ * @returns 처리된 날씨 데이터
+ */
+export const processWeatherData = (data: any[], midTermData?: any): ProcessedWeatherData[] => {
+  // 데이터가 없으면 빈 배열 반환
   if (!data || data.length === 0) {
-    console.warn('처리할 날씨 데이터가 없습니다.');
     return [];
   }
   
   console.log(`총 ${data.length}개의 날씨 데이터를 처리합니다.`);
   
+  // 발표 시간 확인 (17시 이후 발표인지)
+  const baseTime = data[0]?.baseTime || '';
+  const isAfternoonForecast = ['1700', '2000', '2300'].includes(baseTime);
+  console.log(`발표 시간: ${baseTime}, 4일 후 예보 포함: ${isAfternoonForecast}`);
+  
+  // 오늘 날짜 확인
+  const today = new Date();
+  const todayStr = formatDate(today);
+  
+  // +4일 날짜 계산
+  const day4Date = new Date(today);
+  day4Date.setDate(today.getDate() + 4);
+  const day4DateStr = formatDate(day4Date);
+  
+  // 날짜별 데이터 확인
+  const uniqueDates = [...new Set(data.map(item => item.fcstDate))];
+  console.log(`${uniqueDates.length}개의 날짜에 대한 데이터를 처리합니다:`, uniqueDates.join(', '));
+  
+  // +4일 데이터가 있는지 확인
+  const has4DayData = uniqueDates.includes(day4DateStr);
+  console.log(`+4일(${day4DateStr}) 데이터 포함 여부: ${has4DayData}`);
+  
   // 먼저 날짜별로 데이터 그룹화
   const dailyData: { [key: string]: any } = {};
   
   // 날짜별 데이터 초기화
-  const uniqueDates = [...new Set(data.map(item => item.fcstDate))];
   uniqueDates.forEach(date => {
     dailyData[date] = {
       date,
@@ -275,10 +319,10 @@ export const processWeatherData = (data: any[]) => {
       wsdSum: 0,
       wsdCount: 0,
       wsd: null, // 평균 풍속
+      // 중기예보 데이터 여부
+      isMidTermData: false,
     };
   });
-  
-  console.log(`${uniqueDates.length}개의 날짜에 대한 데이터를 처리합니다:`, uniqueDates.join(', '));
   
   // TMN(최저기온)과 TMX(최고기온) 데이터 먼저 처리 (참고용으로만 저장)
   const tmnData = data.filter(item => item.category === 'TMN');
@@ -295,6 +339,12 @@ export const processWeatherData = (data: any[]) => {
     if (dailyData[date] && !isNaN(value)) {
       dailyData[date].tmnValue = value;
       console.log(`${date} TMN 값 저장: ${value}°C (참고용)`);
+      
+      // TMN 값을 최저기온으로 사용 (TMP로 계산된 값이 없거나 TMN 값이 더 낮은 경우)
+      if (dailyData[date].minTemp === null || value < dailyData[date].minTemp) {
+        dailyData[date].minTemp = value;
+        console.log(`${date} 최저기온 업데이트: ${value}°C (TMN)`);
+      }
     }
   });
   
@@ -306,12 +356,14 @@ export const processWeatherData = (data: any[]) => {
     if (dailyData[date] && !isNaN(value)) {
       dailyData[date].tmxValue = value;
       console.log(`${date} TMX 값 저장: ${value}°C (참고용)`);
+      
+      // TMX 값을 최고기온으로 사용 (TMP로 계산된 값이 없거나 TMX 값이 더 높은 경우)
+      if (dailyData[date].maxTemp === null || value > dailyData[date].maxTemp) {
+        dailyData[date].maxTemp = value;
+        console.log(`${date} 최고기온 업데이트: ${value}°C (TMX)`);
+      }
     }
   });
-  
-  // 오늘 날짜 확인
-  const today = new Date();
-  const todayStr = formatDate(today);
   
   // 오늘 데이터가 있는지 확인
   if (dailyData[todayStr]) {
@@ -496,7 +548,199 @@ export const processWeatherData = (data: any[]) => {
   });
   
   console.log('날씨 데이터 처리 완료');
-  return sortedData;
+  
+  // 결과 배열 생성
+  const result: ProcessedWeatherData[] = [];
+  
+  // 날짜별 데이터를 결과 배열에 추가
+  Object.values(dailyData).forEach((day: any) => {
+    // 기본 데이터 구성
+    const processedDay: ProcessedWeatherData = {
+      date: day.date,
+      time: day.hourly.length > 0 ? day.hourly[0].time : '0000',
+      temp: day.hourly.length > 0 ? day.hourly[0].temp : null,
+      minTemp: day.minTemp,
+      maxTemp: day.maxTemp,
+      sky: day.sky || null,
+      pty: day.pty || '0',
+      pop: day.maxPop,
+      reh: day.hourly.length > 0 ? day.hourly[0].reh : null,
+      wsd: day.wsd,
+      pcpCategory: day.pcpCategory || '0',
+      pcpText: day.pcpText || '강수없음',
+      pcpValue: day.maxPcpValue ? day.maxPcpValue.toString() : null,
+      snoCategory: day.snoCategory || '0',
+      snoText: day.snoText || '적설없음',
+      snoValue: day.maxSnoValue ? day.maxSnoValue.toString() : null,
+      maxPcpValue: day.maxPcpValue ? day.maxPcpValue.toString() : null,
+      maxSnoValue: day.maxSnoValue ? day.maxSnoValue.toString() : null,
+      isMidTermData: day.isMidTermData || false,
+    };
+    
+    result.push(processedDay);
+  });
+  
+  // 중기예보 데이터가 있는 경우 처리
+  if (midTermData && midTermData.forecast) {
+    console.log('중기예보 데이터를 처리합니다.');
+    
+    // 중기예보 데이터 처리
+    midTermData.forecast.forEach((forecastDay: any) => {
+      if (!forecastDay) return; // null 체크
+      
+      // 날짜 계산 (오늘 + day)
+      const forecastDate = new Date(today);
+      forecastDate.setDate(forecastDate.getDate() + forecastDay.day);
+      
+      // YYYYMMDD 형식으로 변환
+      const dateStr = formatDate(forecastDate);
+      
+      // +4일 데이터인 경우 특별 처리
+      const is4DayData = dateStr === day4DateStr;
+      
+      // 이미 단기예보 데이터가 있는 경우 스킵 (단, +4일 데이터는 예외)
+      if (dailyData[dateStr] && !dailyData[dateStr].isMidTermData) {
+        // +4일 데이터이고 최저/최고 기온이 없는 경우 중기예보 데이터로 보완
+        if (is4DayData || dailyData[dateStr].minTemp === null || dailyData[dateStr].maxTemp === null) {
+          if (forecastDay.temperature && (forecastDay.temperature.min !== undefined || forecastDay.temperature.max !== undefined)) {
+            console.log(`${dateStr}에 대한 단기예보 데이터의 기온 정보가 없거나 +4일 데이터입니다. 중기예보 데이터로 보완합니다.`);
+            
+            // 최저/최고 기온 보완
+            if (dailyData[dateStr].minTemp === null && forecastDay.temperature.min !== undefined) {
+              dailyData[dateStr].minTemp = forecastDay.temperature.min;
+              console.log(`${dateStr} 최저기온 업데이트: ${forecastDay.temperature.min}°C (중기예보)`);
+            }
+            if (dailyData[dateStr].maxTemp === null && forecastDay.temperature.max !== undefined) {
+              dailyData[dateStr].maxTemp = forecastDay.temperature.max;
+              console.log(`${dateStr} 최고기온 업데이트: ${forecastDay.temperature.max}°C (중기예보)`);
+            }
+          }
+        } else {
+          console.log(`${dateStr}에 대한 단기예보 데이터가 이미 있습니다. 중기예보 데이터를 사용하지 않습니다.`);
+          return;
+        }
+      }
+      
+      // 중기예보 데이터 생성 또는 업데이트
+      if (!dailyData[dateStr]) {
+        console.log(`${dateStr}에 대한 단기예보 데이터가 없습니다. 중기예보 데이터를 사용합니다.`);
+        dailyData[dateStr] = {
+          date: dateStr,
+          hourly: [],
+          isMidTermData: true,
+        };
+      }
+      
+      // 중기예보 데이터 설정
+      const dayData = dailyData[dateStr];
+      dayData.isMidTermData = true;
+      
+      // 기온 정보 설정
+      if (forecastDay.temperature) {
+        if (forecastDay.temperature.min !== undefined) {
+          dayData.minTemp = forecastDay.temperature.min;
+        }
+        if (forecastDay.temperature.max !== undefined) {
+          dayData.maxTemp = forecastDay.temperature.max;
+        }
+      }
+      
+      // 날씨 정보 설정 (오전/오후 구분이 있는 경우)
+      if (forecastDay.am && forecastDay.pm) {
+        // 강수확률은 오전/오후 중 높은 값 사용
+        dayData.maxPop = Math.max(forecastDay.am.rainProb || 0, forecastDay.pm.rainProb || 0);
+        
+        // 하늘상태는 오후 기준으로 설정
+        const weatherText = forecastDay.pm.weather || forecastDay.am.weather;
+        
+        // 하늘상태 매핑
+        if (weatherText.includes('맑음')) {
+          dayData.sky = '1'; // 맑음
+        } else if (weatherText.includes('구름많음')) {
+          dayData.sky = '3'; // 구름많음
+        } else {
+          dayData.sky = '4'; // 흐림
+        }
+        
+        // 강수형태 매핑
+        if (weatherText.includes('비') && weatherText.includes('눈')) {
+          dayData.pty = '2'; // 비/눈
+        } else if (weatherText.includes('비') || weatherText.includes('소나기')) {
+          dayData.pty = '1'; // 비
+        } else if (weatherText.includes('눈')) {
+          dayData.pty = '3'; // 눈
+        } else {
+          dayData.pty = '0'; // 없음
+        }
+      } 
+      // 날씨 정보 설정 (전체 날씨만 있는 경우)
+      else if (forecastDay.weather) {
+        // 강수확률
+        dayData.maxPop = forecastDay.rainProb || 0;
+        
+        // 하늘상태 매핑
+        const weatherText = forecastDay.weather;
+        
+        if (weatherText.includes('맑음')) {
+          dayData.sky = '1'; // 맑음
+        } else if (weatherText.includes('구름많음')) {
+          dayData.sky = '3'; // 구름많음
+        } else {
+          dayData.sky = '4'; // 흐림
+        }
+        
+        // 강수형태 매핑
+        if (weatherText.includes('비') && weatherText.includes('눈')) {
+          dayData.pty = '2'; // 비/눈
+        } else if (weatherText.includes('비') || weatherText.includes('소나기')) {
+          dayData.pty = '1'; // 비
+        } else if (weatherText.includes('눈')) {
+          dayData.pty = '3'; // 눈
+        } else {
+          dayData.pty = '0'; // 없음
+        }
+      }
+      
+      console.log(`중기예보 데이터 추가: ${dateStr}, 최저: ${dayData.minTemp}°C, 최고: ${dayData.maxTemp}°C, 강수확률: ${dayData.maxPop}%`);
+    });
+    
+    // 중기예보 데이터가 추가된 후 결과 배열 재생성
+    result.length = 0; // 기존 결과 초기화
+    
+    // 날짜별 데이터를 결과 배열에 추가 (날짜순 정렬)
+    const sortedDates = Object.keys(dailyData).sort();
+    sortedDates.forEach(date => {
+      const day = dailyData[date];
+      
+      // 기본 데이터 구성
+      const processedDay: ProcessedWeatherData = {
+        date: day.date,
+        time: day.hourly.length > 0 ? day.hourly[0].time : '0000',
+        temp: day.hourly.length > 0 ? day.hourly[0].temp : null,
+        minTemp: day.minTemp,
+        maxTemp: day.maxTemp,
+        sky: day.sky || null,
+        pty: day.pty || '0',
+        pop: day.maxPop,
+        reh: day.hourly.length > 0 ? day.hourly[0].reh : null,
+        wsd: day.wsd,
+        pcpCategory: day.pcpCategory || '0',
+        pcpText: day.pcpText || '강수없음',
+        pcpValue: day.maxPcpValue ? day.maxPcpValue.toString() : null,
+        snoCategory: day.snoCategory || '0',
+        snoText: day.snoText || '적설없음',
+        snoValue: day.maxSnoValue ? day.maxSnoValue.toString() : null,
+        maxPcpValue: day.maxPcpValue ? day.maxPcpValue.toString() : null,
+        maxSnoValue: day.maxSnoValue ? day.maxSnoValue.toString() : null,
+        isMidTermData: day.isMidTermData || false,
+      };
+      
+      result.push(processedDay);
+    });
+  }
+  
+  console.log(`총 ${result.length}개의 처리된 날씨 데이터를 반환합니다.`);
+  return result;
 };
 
 // 강수형태 설명 반환 함수

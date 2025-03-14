@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import locationsData from '../constants/locations.json';
 import SimpleCalendar from './SimpleCalendar';
+import { Colors } from '@/constants/Colors';
 
 interface StepByStepLocationProps {
   onComplete: (location: string, nx: number, ny: number, date: string) => void;
@@ -143,10 +146,23 @@ const StepByStepLocation: React.FC<StepByStepLocationProps> = ({ onComplete }) =
     }
   };
   
+  // 헤더 렌더링 함수
+  const renderHeader = (title: string, showBackButton: boolean = false) => (
+    <View style={styles.headerContainer}>
+      {showBackButton && (
+        <TouchableOpacity onPress={goBack} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={30} color="#000000" />
+        </TouchableOpacity>
+      )}
+      <Text style={[styles.stepTitle, showBackButton && styles.stepTitleWithBack]}>{title}</Text>
+      {showBackButton && <View style={styles.backButtonPlaceholder} />}
+    </View>
+  );
+  
   // 시/도 선택 화면
   const renderCitySelection = () => (
     <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>시/도 선택</Text>
+      {renderHeader('시/도 선택')}
       <FlatList
         data={cities}
         keyExtractor={(item) => item}
@@ -158,7 +174,7 @@ const StepByStepLocation: React.FC<StepByStepLocationProps> = ({ onComplete }) =
             <Text style={styles.itemText}>{item}</Text>
           </TouchableOpacity>
         )}
-        numColumns={2}
+        numColumns={1}
         contentContainerStyle={styles.gridContainer}
       />
     </View>
@@ -167,12 +183,7 @@ const StepByStepLocation: React.FC<StepByStepLocationProps> = ({ onComplete }) =
   // 구/군 선택 화면
   const renderDistrictSelection = () => (
     <View style={styles.stepContainer}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={goBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← 뒤로</Text>
-        </TouchableOpacity>
-        <Text style={styles.stepTitle}>{selectedCity} 구/군 선택</Text>
-      </View>
+      {renderHeader(`${selectedCity} 구/군 선택`, true)}
       
       {districts.length > 0 ? (
         <FlatList
@@ -186,7 +197,7 @@ const StepByStepLocation: React.FC<StepByStepLocationProps> = ({ onComplete }) =
               <Text style={styles.itemText}>{item}</Text>
             </TouchableOpacity>
           )}
-          numColumns={2}
+          numColumns={1}
           contentContainerStyle={styles.gridContainer}
         />
       ) : (
@@ -201,12 +212,7 @@ const StepByStepLocation: React.FC<StepByStepLocationProps> = ({ onComplete }) =
   // 동/읍/면 선택 화면
   const renderNeighborhoodSelection = () => (
     <View style={styles.stepContainer}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={goBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← 뒤로</Text>
-        </TouchableOpacity>
-        <Text style={styles.stepTitle}>{selectedCity} {selectedDistrict} 동/읍/면 선택</Text>
-      </View>
+      {renderHeader(`${selectedCity} ${selectedDistrict} 동/읍/면 선택`, true)}
       
       {neighborhoods.length > 0 ? (
         <FlatList
@@ -220,7 +226,7 @@ const StepByStepLocation: React.FC<StepByStepLocationProps> = ({ onComplete }) =
               <Text style={styles.itemText}>{item}</Text>
             </TouchableOpacity>
           )}
-          numColumns={2}
+          numColumns={1}
           contentContainerStyle={styles.gridContainer}
         />
       ) : (
@@ -235,12 +241,7 @@ const StepByStepLocation: React.FC<StepByStepLocationProps> = ({ onComplete }) =
   // 날짜 선택 화면
   const renderDateSelection = () => (
     <View style={styles.stepContainer}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={goBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← 뒤로</Text>
-        </TouchableOpacity>
-        <Text style={styles.stepTitle}>날짜 선택</Text>
-      </View>
+      {renderHeader('날짜 선택', true)}
       <SimpleCalendar onDateSelect={handleDateSelect} />
       <View style={styles.summaryContainer}>
         <Text style={styles.summaryTitle}>선택한 정보</Text>
@@ -286,84 +287,89 @@ const StepByStepLocation: React.FC<StepByStepLocationProps> = ({ onComplete }) =
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {renderCurrentStep()}
       <View style={styles.debugContainer}>
-        <Text style={styles.debugText}>현재 단계: {step}</Text>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   stepContainer: {
     flex: 1,
-    padding: 15,
   },
-  header: {
+  headerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'space-between',
+    backgroundColor: Colors.gary100,
+    height: 54,
+    paddingVertical: 15,
+    paddingHorizontal: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    marginBottom: 15,
   },
   backButton: {
-    padding: 10,
+    padding: 8,
+    width: 50,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  backButtonPlaceholder: {
+    width: 50,
   },
   backButtonText: {
-    fontSize: 16,
-    color: '#4a90e2',
+    fontSize: 18,
+    color: Colors.gary500,
     fontWeight: '600',
   },
   stepTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 20,
+    fontSize: 18,
+    fontFamily:'SUIT-Bold',
+    color: Colors.gary600,
     textAlign: 'center',
     flex: 1,
+  },
+  stepTitleWithBack: {
+    marginLeft: 0,
   },
   gridContainer: {
-    paddingBottom: 20,
+    paddingHorizontal: 15,
+    paddingBottom: 10,
   },
   itemButton: {
-    flex: 1,
     margin: 8,
-    padding: 20,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    alignItems: 'center',
+    padding: 15,
+    backgroundColor: Colors.whitebox,
+    borderRadius: 10,
+    alignItems: 'flex-start',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    minHeight: 80,
+    minHeight: 60,
   },
   itemText: {
-    fontSize: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.0)',
+    fontSize: 14,
     fontWeight: '500',
     color: '#333',
-    textAlign: 'center',
   },
   summaryContainer: {
-    backgroundColor: 'white',
+    backgroundColor: Colors.whitebox,
     borderRadius: 12,
     padding: 15,
-    marginTop: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    margin: 15,
+    
   },
   summaryTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'SUIT-Bold',
+    color: Colors.gary600,
     marginBottom: 15,
     textAlign: 'center',
   },
@@ -373,21 +379,22 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
+    fontFamily: 'SUIT-Bold',
+    color: Colors.gary500,
     width: 60,
   },
   summaryValue: {
     fontSize: 16,
-    color: '#333',
+    fontFamily: 'SUIT-Bold',
+    color: Colors.gary400,
     flex: 1,
   },
   completeButton: {
-    backgroundColor: '#4a90e2',
+    backgroundColor: Colors.blue300,
     borderRadius: 8,
-    padding: 15,
+    padding: 10,
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 15,
   },
   disabledButton: {
     backgroundColor: '#cccccc',

@@ -66,10 +66,12 @@ export interface WeatherForecastProps {
   ny: number;
   locationName: string;
   selectedDate?: string; // 선택한 날짜 (YYYY-MM-DD 형식)
+  landRegId?: string; // 육상 중기예보 지역 코드
+  taRegId?: string; // 기온 중기예보 지역 코드
 }
 
 export interface CampingTip {
-  icon: string;
+  icon: any;
   title: string;
   message: string;
   style?: Record<string, any>;
@@ -83,4 +85,8 @@ export interface WeatherDataHookResult {
   error: any;
   lastUpdated: Date;
   refresh: () => Promise<void>;
-} 
+}
+
+// 빈 객체를 기본 내보내기로 추가
+const WeatherExport = {};
+export default WeatherExport; 

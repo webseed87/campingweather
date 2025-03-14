@@ -9,18 +9,23 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { searchCampings, CampingItem } from "../../api/campingApi";
 import {
   findGridCoordinatesByAddress,
   findNearestGridFromLocations,
 } from "../utils/coordinateConverter";
+import { MID_FORECAST_REGION_CODES } from "../../api/midTermForecast";
+import { Colors } from "@/constants/Colors";
 
 interface CampingSearchProps {
   onCampingSelected: (
     campingName: string,
     nx: number,
     ny: number,
-    addr1: string
+    addr1: string,
+    landRegId?: string,
+    taRegId?: string
   ) => void;
 }
 
@@ -42,6 +47,7 @@ const CampingSearch: React.FC<CampingSearchProps> = ({ onCampingSelected }) => {
   const [selectedCamping, setSelectedCamping] = useState<CampingItem | null>(
     null
   );
+  const [isFocused, setIsFocused] = useState(false);
 
   // 컴포넌트 마운트 시 초기 데이터 로드하지 않음
   useEffect(() => {
@@ -105,6 +111,153 @@ const CampingSearch: React.FC<CampingSearchProps> = ({ onCampingSelected }) => {
     }
   };
 
+  /**
+   * 주소에서 중기예보 지역 코드를 찾는 함수
+   * @param address 주소 문자열
+   * @returns {landRegId, taRegId} 중기예보 지역 코드
+   */
+  const findMidForecastRegionCodes = (
+    address: string
+  ): { landRegId?: string; taRegId?: string } => {
+    try {
+      if (!address) return {};
+
+      // 주소에서 시/도, 시/군/구 정보 추출
+      let city = "";
+      let district = "";
+
+      // 특별시, 광역시, 특별자치시, 도 추출
+      const cityMatch = address.match(
+        /서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주/
+      );
+      if (cityMatch) {
+        city = cityMatch[0];
+      }
+
+      // 시/군/구 추출 (시/도 다음에 오는 단어)
+      if (city) {
+        const districtRegex = new RegExp(`${city}\\s+([\\w가-힣]+)`, "u");
+        const districtMatch = address.match(districtRegex);
+        if (districtMatch && districtMatch[1]) {
+          district = districtMatch[1];
+        }
+      }
+
+      console.log(
+        `주소에서 추출한 지역 정보: 시/도=${city}, 시/군/구=${district}`
+      );
+
+      // 육상 중기예보 지역 코드 찾기
+      let landRegId: string | undefined;
+
+      // 시/도에 따른 육상 중기예보 지역 코드 매핑
+      if (city === "서울" || city === "인천" || city === "경기") {
+        landRegId = MID_FORECAST_REGION_CODES.LAND["서울, 인천, 경기도"];
+      } else if (city === "강원") {
+        // 강원도는 영서/영동 구분
+        // 영동 지역: 강릉, 속초, 동해, 삼척, 태백, 고성, 양양
+        const eastRegions = [
+          "강릉",
+          "속초",
+          "동해",
+          "삼척",
+          "태백",
+          "고성",
+          "양양",
+        ];
+        if (
+          district &&
+          eastRegions.some((region) => district.includes(region))
+        ) {
+          landRegId = MID_FORECAST_REGION_CODES.LAND["강원도 영동"];
+        } else {
+          landRegId = MID_FORECAST_REGION_CODES.LAND["강원도 영서"];
+        }
+      } else if (city === "대전" || city === "세종" || city === "충남") {
+        landRegId = MID_FORECAST_REGION_CODES.LAND["대전, 세종, 충청남도"];
+      } else if (city === "충북") {
+        landRegId = MID_FORECAST_REGION_CODES.LAND["충청북도"];
+      } else if (city === "광주" || city === "전남") {
+        landRegId = MID_FORECAST_REGION_CODES.LAND["광주, 전라남도"];
+      } else if (city === "전북") {
+        landRegId = MID_FORECAST_REGION_CODES.LAND["전라북도"];
+      } else if (city === "대구" || city === "경북") {
+        landRegId = MID_FORECAST_REGION_CODES.LAND["대구, 경상북도"];
+      } else if (city === "부산" || city === "울산" || city === "경남") {
+        landRegId = MID_FORECAST_REGION_CODES.LAND["부산, 울산, 경상남도"];
+      } else if (city === "제주") {
+        landRegId = MID_FORECAST_REGION_CODES.LAND["제주도"];
+      }
+
+      // 기온 중기예보 지역 코드 찾기
+      let taRegId: string | undefined;
+
+      // 시/군/구 이름으로 기온 중기예보 지역 코드 찾기
+      if (district) {
+        // 특별한 경우 처리 (예: 광주(전남), 광주(경기) 구분)
+        let searchDistrict = district;
+        if (district === "광주" && city === "경기") {
+          searchDistrict = "광주(경기)";
+        } else if (district === "광주" && city === "전남") {
+          searchDistrict = "광주(전남)";
+        }
+
+        // TEMPERATURE 객체에서 일치하는 지역 찾기
+        for (const [regionName, regionCode] of Object.entries(
+          MID_FORECAST_REGION_CODES.TEMPERATURE
+        )) {
+          if (regionName === searchDistrict) {
+            taRegId = regionCode;
+            break;
+          }
+        }
+      }
+
+      // 시/군/구 코드를 찾지 못한 경우, 시/도 단위로 대표 지역 선택
+      if (!taRegId) {
+        if (city === "서울") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["서울"];
+        } else if (city === "부산") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["부산"];
+        } else if (city === "대구") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["대구"];
+        } else if (city === "인천") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["인천"];
+        } else if (city === "광주") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["광주(전남)"];
+        } else if (city === "대전") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["대전"];
+        } else if (city === "울산") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["울산"];
+        } else if (city === "세종") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["세종"];
+        } else if (city === "경기") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["수원"];
+        } else if (city === "강원") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["춘천"];
+        } else if (city === "충북") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["청주"];
+        } else if (city === "충남") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["천안"];
+        } else if (city === "전북") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["전주"];
+        } else if (city === "전남") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["목포"];
+        } else if (city === "경북") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["포항"];
+        } else if (city === "경남") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["창원"];
+        } else if (city === "제주") {
+          taRegId = MID_FORECAST_REGION_CODES.TEMPERATURE["제주"];
+        }
+      }
+
+      return { landRegId, taRegId };
+    } catch (error) {
+      return {};
+    }
+  };
+
   // 캠핑장 선택 처리 함수
   const handleSelectCamping = (camping: any) => {
     try {
@@ -124,21 +277,27 @@ const CampingSearch: React.FC<CampingSearchProps> = ({ onCampingSelected }) => {
         );
         nx = coordinates.nx;
         ny = coordinates.ny;
-        console.log(
-          `locations.json 기반 좌표: nx=${nx}, ny=${ny}, 원본 좌표: mapX=${camping.mapX}, mapY=${camping.mapY}`
-        );
+     
       } else {
         // 경도/위도가 없는 경우 주소를 사용하여 좌표 추출
         const coordinates = findGridCoordinatesByAddress(camping.addr1);
         nx = coordinates.nx;
         ny = coordinates.ny;
-        console.log(
-          `주소 기반 좌표: nx=${nx}, ny=${ny}, 주소: ${camping.addr1}`
-        );
+    
       }
 
+      // 중기예보 지역 코드 찾기
+      const { landRegId, taRegId } = findMidForecastRegionCodes(camping.addr1);
+
       setSelectedCamping(camping);
-      onCampingSelected(camping.facltNm, nx, ny, camping.addr1);
+      onCampingSelected(
+        camping.facltNm,
+        nx,
+        ny,
+        camping.addr1,
+        landRegId,
+        taRegId
+      );
     } catch (error) {
       console.error("캠핑장 좌표 변환 중 오류 발생:", error);
       Alert.alert(
@@ -156,18 +315,34 @@ const CampingSearch: React.FC<CampingSearchProps> = ({ onCampingSelected }) => {
       </Text>
 
       <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="캠핑장 이름을 입력하세요"
-          value={searchText}
-          onChangeText={handleSearch}
-        />
+        <View
+          style={[
+            styles.searchInputContainer,
+            isFocused && styles.searchInputContainerFocused,
+          ]}
+        >
+          <Ionicons
+            name="search"
+            size={20}
+            color={Colors.gary300}
+            style={styles.searchIcon}
+          />
+          <TextInput
+            style={[styles.searchInput, isFocused && { outline: "none" }]}
+            placeholder="캠핑장 이름을 입력하세요"
+            placeholderTextColor={Colors.gary300}
+            value={searchText}
+            onChangeText={handleSearch}
+          />
+        </View>
       </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#0066cc" />
-          <Text style={styles.loadingText}>캠핑장 정보를 불러오는 중...</Text>
+          <Text style={styles.loadingText}>
+            🏕️ 캠핑장 정보를 불러오는 중...
+          </Text>
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
@@ -209,7 +384,7 @@ const CampingSearch: React.FC<CampingSearchProps> = ({ onCampingSelected }) => {
                 campingNameDisplay = (
                   <Text>
                     {before}
-                    <Text style={{ fontWeight: "bold", color: "#0066cc" }}>
+                    <Text style={{ fontWeight: "bold", color: "#186363" }}>
                       {match}
                     </Text>
                     {after}
@@ -242,7 +417,7 @@ const CampingSearch: React.FC<CampingSearchProps> = ({ onCampingSelected }) => {
               <Text style={styles.emptyText}>
                 {searchText && searchText.trim() !== ""
                   ? `'${searchText}'에 대한 검색 결과가 없습니다`
-                  : "캠핑장 이름을 입력하여 검색해주세요"}
+                  : ""}
               </Text>
             </View>
           }
@@ -261,24 +436,43 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 30,
     fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 8,
+    color: Colors.gary500,
+    fontFamily: "SUIT-Bold",
+    marginBottom: 10,
   },
   subtitle: {
     fontSize: 16,
-    color: "#666",
-    marginBottom: 16,
+    color: Colors.gary400,
+    fontFamily: "SUIT-Regular",
+    marginBottom: 20,
   },
   searchContainer: {
     marginBottom: 16,
   },
-  searchInput: {
-    backgroundColor: "#fff",
-    padding: 12,
-    borderRadius: 8,
+  searchInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.white,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "#ddd",
-    fontSize: 16,
+    paddingHorizontal: 15,
+  },
+  searchInputContainerFocused: {
+    borderWidth: 0,
+    borderColor: 'transparent',
+ 
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    fontSize: 15,
+    fontFamily: "SUIT-Regular",
+    outlineColor: "transparent",
   },
   loadingContainer: {
     flex: 1,
@@ -309,17 +503,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryButtonText: {
-    color: "#fff",
+    color: Colors.white,
     fontSize: 16,
     fontWeight: "bold",
   },
   resultItem: {
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 8,
+    backgroundColor: Colors.whitebox,
+    padding: 15,
+    borderRadius: 10,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: Colors.gary200,
   },
   resultItemContent: {
     flexDirection: "row",
@@ -332,25 +526,26 @@ const styles = StyleSheet.create({
   },
   campingName: {
     fontSize: 16,
-    fontWeight: "bold",
+    fontFamily: "SUIT-blod",
     marginBottom: 4,
   },
   campingAddress: {
     fontSize: 13,
-    color: "#666",
+    color: Colors.gary500,
     marginBottom: 4,
   },
   regionContainer: {
-    backgroundColor: "#f0f0f0",
+    backgroundColor: Colors.gary200,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 6,
     justifyContent: "center",
   },
   regionName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "500",
-    color: "#444",
+    fontFamily: "SUIT-regular",
+    color: Colors.gary500,
   },
   emptyContainer: {
     padding: 24,

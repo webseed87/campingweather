@@ -1,4 +1,8 @@
-declare module '@env' {
-  export const API_KEY: string;
-  export const CAMPING_API_KEY: string;
+declare global {
+  namespace NodeJS {
+    interface ProcessEnv {
+      EXPO_PUBLIC_API_KEY: string;
+      EXPO_PUBLIC_CAMPING_API_KEY: string;
+    }
+  }
 } 

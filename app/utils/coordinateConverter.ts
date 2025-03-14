@@ -169,4 +169,13 @@ export function findNearestGridFromLocations(mapX: number, mapY: number): { nx: 
     console.error('위치 데이터 처리 중 오류 발생:', error);
     return convertToGridCoordinate(mapX, mapY); // 오류 발생 시 기본 변환 함수 사용
   }
-} 
+}
+
+// 모든 함수를 객체로 묶어 기본 내보내기
+const coordinateConverter = {
+  convertToGridCoordinate,
+  findGridCoordinatesByAddress,
+  findNearestGridFromLocations
+};
+
+export default coordinateConverter; 

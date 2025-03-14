@@ -1,16 +1,39 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, Platform } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { fetchMidForecastCombined, MID_FORECAST_REGION_CODES } from '../../../api/midTermForecast';
 import { useLocationStore } from '../../stores/locationStore';
 import { IconSymbol } from '../../../components/ui/IconSymbol';
+import { weeklyForecastIcons } from '../../constants/campingTipIcons';
+import { Colors } from '@/constants/Colors';
 
 interface WeeklyForecastProps {
-  // 필요한 props가 있다면 여기에 추가
+  landRegId?: string;
+  taRegId?: string;
+  nx?: number;
+  ny?: number;
 }
 
-// 날씨 상태에 따른 아이콘 매핑
-const weatherIcons: { [key: string]: any } = {
+interface WeatherData {
+  weather: string;
+  rainProb: string;
+  temperature: {
+    min: string;
+    max: string;
+  };
+  am?: {
+    weather: string;
+    rainProb: string;
+  };
+  pm?: {
+    weather: string;
+    rainProb: string;
+  };
+  day: number;
+}
+
+// 날씨 상태에 따른 아이콘 매핑 (IconSymbol 컴포넌트용 - 백업)
+const symbolIcons: { [key: string]: string } = {
   '맑음': 'sun.max.fill',
   '구름많음': 'cloud.sun.fill',
   '구름많고 비': 'cloud.rain.fill',
@@ -23,22 +46,6 @@ const weatherIcons: { [key: string]: any } = {
   '흐리고 비/눈': 'cloud.sleet.fill',
   '흐리고 소나기': 'cloud.heavyrain.fill',
   '소나기': 'cloud.heavyrain.fill',
-};
-
-// 날씨 상태에 따른 배경색 매핑
-const weatherColors: { [key: string]: string } = {
-  '맑음': '#f9d71c',
-  '구름많음': '#b5cde3',
-  '구름많고 비': '#8aa9c1',
-  '구름많고 눈': '#e0e0e0',
-  '구름많고 비/눈': '#c0c0c0',
-  '구름많고 소나기': '#7a9cb3',
-  '흐림': '#a0a0a0',
-  '흐리고 비': '#7a9cb3',
-  '흐리고 눈': '#d0d0d0',
-  '흐리고 비/눈': '#b0b0b0',
-  '흐리고 소나기': '#6a8ca3',
-  '소나기': '#6a8ca3',
 };
 
 // 날짜 포맷팅 함수
@@ -54,19 +61,34 @@ const formatDate = (daysToAdd: number): string => {
   return `${month}/${day}(${weekday})`;
 };
 
-export const WeeklyForecast: React.FC<WeeklyForecastProps> = () => {
+// 날씨 아이콘 가져오기 함수
+const getWeatherIcon = (weather: string) => {
+  // @ts-ignore - 타입 오류 무시
+  return weeklyForecastIcons[weather] || null;
+};
+
+const getSymbolIcon = (weather: string) => {
+  return symbolIcons[weather] || 'cloud.fill';
+};
+
+export const WeeklyForecast: React.FC<WeeklyForecastProps> = ({ landRegId, taRegId, nx, ny }) => {
   // 위치 정보 가져오기
   const { selectedLocation } = useLocationStore();
   
   // 지역 코드 매핑 (실제 앱에서는 위치 정보에 따라 적절한 지역 코드 선택 로직 필요)
   const [regionCodes, setRegionCodes] = useState({
-    landRegId: MID_FORECAST_REGION_CODES.LAND['서울, 인천, 경기도'],
-    taRegId: MID_FORECAST_REGION_CODES.TEMPERATURE['서울']
+    landRegId: landRegId || MID_FORECAST_REGION_CODES.LAND['서울, 인천, 경기도'],
+    taRegId: taRegId || MID_FORECAST_REGION_CODES.TEMPERATURE['서울']
   });
   
   // 위치 정보에 따라 지역 코드 업데이트
   useEffect(() => {
-    if (selectedLocation) {
+    if (landRegId && taRegId) {
+      setRegionCodes({
+        landRegId,
+        taRegId
+      });
+    } else if (selectedLocation) {
       // 여기서는 간단한 예시로 서울 지역 코드를 사용
       // 실제 앱에서는 위치 정보에 따라 적절한 지역 코드 매핑 로직 구현 필요
       setRegionCodes({
@@ -74,15 +96,31 @@ export const WeeklyForecast: React.FC<WeeklyForecastProps> = () => {
         taRegId: MID_FORECAST_REGION_CODES.TEMPERATURE['서울']
       });
     }
-  }, [selectedLocation]);
+  }, [selectedLocation, landRegId, taRegId]);
   
   // 중기예보 데이터 가져오기
-  const { data: weeklyForecast, isLoading, error } = useQuery({
-    queryKey: ['weeklyForecast', regionCodes.landRegId, regionCodes.taRegId],
-    queryFn: () => fetchMidForecastCombined(regionCodes.landRegId, regionCodes.taRegId),
+  const { data: weeklyForecast, isLoading, error, refetch } = useQuery({
+    queryKey: ['weeklyForecast', regionCodes.landRegId, regionCodes.taRegId, nx, ny],
+    queryFn: () => fetchMidForecastCombined(regionCodes.landRegId, regionCodes.taRegId, nx, ny),
     staleTime: 1000 * 60 * 60, // 1시간 동안 데이터 유지
     refetchInterval: 1000 * 60 * 60, // 1시간마다 자동 갱신
+    retry: 3, // 실패 시 3번 재시도
+    retryDelay: 1000, // 재시도 간격 1초
   });
+  
+  // 컴포넌트 마운트 시 데이터 다시 가져오기
+  useEffect(() => {
+    console.log('WeeklyForecast 컴포넌트 마운트: 데이터 새로고침');
+    refetch();
+  }, [refetch]);
+  
+  // 좌표 변경 시 데이터 다시 가져오기
+  useEffect(() => {
+    if (nx && ny) {
+      console.log(`좌표 변경 감지: nx=${nx}, ny=${ny}, 데이터 새로고침`);
+      refetch();
+    }
+  }, [nx, ny, refetch]);
   
   // 로딩 중 표시
   if (isLoading) {
@@ -96,6 +134,7 @@ export const WeeklyForecast: React.FC<WeeklyForecastProps> = () => {
   
   // 에러 표시
   if (error) {
+    console.error('주간 예보 로딩 오류:', error);
     return (
       <View style={styles.errorContainer}>
         <IconSymbol name="exclamationmark.triangle.fill" size={24} color="#ff0000" />
@@ -106,6 +145,7 @@ export const WeeklyForecast: React.FC<WeeklyForecastProps> = () => {
   
   // 데이터가 없는 경우
   if (!weeklyForecast || !weeklyForecast.forecast || weeklyForecast.forecast.length === 0) {
+    console.error('주간 예보 데이터 없음');
     return (
       <View style={styles.errorContainer}>
         <IconSymbol name="exclamationmark.triangle.fill" size={24} color="#ff0000" />
@@ -114,50 +154,75 @@ export const WeeklyForecast: React.FC<WeeklyForecastProps> = () => {
     );
   }
   
+  // 날짜별 데이터 로깅
+  console.log('주간 예보 데이터 요약:');
+  weeklyForecast.forecast.forEach((day: any) => {
+    if (day) {
+      const date = new Date();
+      date.setDate(date.getDate() + day.day);
+      console.log(`${date.getMonth() + 1}/${date.getDate()} (${day.day}일 후): 최저=${day.temperature?.min}°, 최고=${day.temperature?.max}°`);
+    }
+  });
+  
+  // 유효한 데이터만 필터링
+  const validForecasts = weeklyForecast.forecast.filter((day: any) => day !== null);
+  
   return (
     <View style={styles.container}>
       <Text style={styles.title}>주간 예보</Text>
       
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scrollView}>
-        {weeklyForecast.forecast.map((day: any) => {
+        {/* @ts-ignore - 타입 오류 무시 (null 값 처리를 위해) */}
+        {validForecasts.map((day: WeatherData) => {
           // 오전/오후 날씨가 있는 경우 (4-7일)
           if (day.am && day.pm) {
             return (
               <View key={`day-${day.day}`} style={styles.dayCard}>
                 <Text style={styles.dateText}>{formatDate(day.day)}</Text>
                 
-                {/* 오전 날씨 */}
-                <View style={styles.halfDay}>
-                  <Text style={styles.timeText}>오전</Text>
-                  <View style={[
-                    styles.weatherIconContainer, 
-                    { backgroundColor: weatherColors[day.am.weather] || '#b5cde3' }
-                  ]}>
-                    <IconSymbol 
-                      name={weatherIcons[day.am.weather] || 'cloud.fill'} 
-                      size={24} 
-                      color="#ffffff" 
-                    />
+                {/* 오전/오후 날씨를 가로로 배치 */}
+                <View style={styles.amPmContainer}>
+                  {/* 오전 날씨 */}
+                  <View style={styles.halfDay}>
+                    <Text style={styles.timeText}>오전</Text>
+                    <View style={styles.weatherIconContainer}>
+                      {getWeatherIcon(day.am.weather) ? (
+                        <Image 
+                          source={getWeatherIcon(day.am.weather)} 
+                          style={styles.weatherIcon} 
+                        />
+                      ) : (
+                        <IconSymbol 
+                          // @ts-ignore - 타입 오류 무시 (아이콘 이름 타입 호환성)
+                          name={getSymbolIcon(day.am.weather)} 
+                          size={24} 
+                          color="#333333" 
+                        />
+                      )}
+                    </View>
+                    <Text style={styles.rainProbText}>{day.am.rainProb}%</Text>
                   </View>
-                  <Text style={styles.weatherText}>{day.am.weather}</Text>
-                  <Text style={styles.rainProbText}>{day.am.rainProb}%</Text>
-                </View>
-                
-                {/* 오후 날씨 */}
-                <View style={styles.halfDay}>
-                  <Text style={styles.timeText}>오후</Text>
-                  <View style={[
-                    styles.weatherIconContainer, 
-                    { backgroundColor: weatherColors[day.pm.weather] || '#b5cde3' }
-                  ]}>
-                    <IconSymbol 
-                      name={weatherIcons[day.pm.weather] || 'cloud.fill'} 
-                      size={24} 
-                      color="#ffffff" 
-                    />
+                  
+                  {/* 오후 날씨 */}
+                  <View style={styles.halfDay}>
+                    <Text style={styles.timeText}>오후</Text>
+                    <View style={styles.weatherIconContainer}>
+                      {getWeatherIcon(day.pm.weather) ? (
+                        <Image 
+                          source={getWeatherIcon(day.pm.weather)} 
+                          style={styles.weatherIcon} 
+                        />
+                      ) : (
+                        <IconSymbol 
+                          // @ts-ignore - 타입 오류 무시 (아이콘 이름 타입 호환성)
+                          name={getSymbolIcon(day.pm.weather)} 
+                          size={24} 
+                          color="#333333" 
+                        />
+                      )}
+                    </View>
+                    <Text style={styles.rainProbText}>{day.pm.rainProb}%</Text>
                   </View>
-                  <Text style={styles.weatherText}>{day.pm.weather}</Text>
-                  <Text style={styles.rainProbText}>{day.pm.rainProb}%</Text>
                 </View>
                 
                 {/* 기온 */}
@@ -168,7 +233,7 @@ export const WeeklyForecast: React.FC<WeeklyForecastProps> = () => {
               </View>
             );
           } 
-          // 하루 전체 날씨만 있는 경우 (8-10일)
+          // 하루 전체 날씨만 있는 경우 (3일, 8-10일)
           else {
             return (
               <View key={`day-${day.day}`} style={styles.dayCard}>
@@ -176,24 +241,52 @@ export const WeeklyForecast: React.FC<WeeklyForecastProps> = () => {
                 
                 {/* 전체 날씨 */}
                 <View style={styles.fullDay}>
-                  <View style={[
-                    styles.weatherIconContainer, 
-                    { backgroundColor: weatherColors[day.weather] || '#b5cde3' }
-                  ]}>
-                    <IconSymbol 
-                      name={weatherIcons[day.weather] || 'cloud.fill'} 
-                      size={24} 
-                      color="#ffffff" 
-                    />
+                  <View style={styles.amPmContainer}>
+                    <View style={styles.halfDay}>
+                      <View style={styles.weatherIconContainer}>
+                        {getWeatherIcon(day.weather) ? (
+                          <Image 
+                            source={getWeatherIcon(day.weather)} 
+                            style={styles.weatherIcon} 
+                          />
+                        ) : (
+                          <IconSymbol 
+                            // @ts-ignore - 타입 오류 무시 (아이콘 이름 타입 호환성)
+                            name={getSymbolIcon(day.weather)} 
+                            size={24} 
+                            color="#333333" 
+                          />
+                        )}
+                      </View>
+                      <Text style={styles.rainProbText}>{day.rainProb}%</Text>
+                    </View>
+                    {day.day >= 8 && (
+                      <View style={styles.halfDay}>
+                        <View style={styles.weatherIconContainer}>
+                          {getWeatherIcon(day.weather) ? (
+                            <Image 
+                              source={getWeatherIcon(day.weather)} 
+                              style={styles.weatherIcon} 
+                            />
+                          ) : (
+                            <IconSymbol 
+                              // @ts-ignore - 타입 오류 무시 (아이콘 이름 타입 호환성)
+                              name={getSymbolIcon(day.weather)} 
+                              size={24} 
+                              color="#333333" 
+                            />
+                          )}
+                        </View>
+                        <Text style={styles.rainProbText}>{day.rainProb}%</Text>
+                      </View>
+                    )}
                   </View>
-                  <Text style={styles.weatherText}>{day.weather}</Text>
-                  <Text style={styles.rainProbText}>{day.rainProb}%</Text>
-                </View>
-                
-                {/* 기온 */}
-                <View style={styles.temperatureContainer}>
-                  <Text style={styles.maxTempText}>{day.temperature.max}°</Text>
-                  <Text style={styles.minTempText}>{day.temperature.min}°</Text>
+                  
+                  {/* 기온 */}
+                  <View style={styles.temperatureContainer}>
+                    <Text style={styles.maxTempText}>{day.temperature.max}°</Text>
+                    <Text style={styles.minTempText}>{day.temperature.min}°</Text>
+                  </View>
                 </View>
               </View>
             );
@@ -206,108 +299,121 @@ export const WeeklyForecast: React.FC<WeeklyForecastProps> = () => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginVertical: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: Colors.whitebox,
+    borderRadius: 10,
+    padding: 15,
+    marginVertical: 10,
+   
   },
   title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
+    fontSize: 16,
+    marginBottom: 15,
+    fontFamily: Platform.OS === 'ios' ? "SUIT-bold" : "SUIT-Bold",
   },
   scrollView: {
     flexDirection: 'row',
   },
   dayCard: {
-    width: 120,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 8,
-    padding: 10,
-    marginRight: 10,
+    width: 100,
     alignItems: 'center',
+    marginRight: 15,
+    borderRadius: 8,
   },
   dateText: {
     fontSize: 14,
-    fontWeight: 'bold',
     marginBottom: 8,
+    fontFamily: Platform.OS === 'ios' ? "SUIT-Medium" : "SUIT-Medium",
   },
   halfDay: {
     alignItems: 'center',
     marginBottom: 8,
+    flex: 1,
   },
   fullDay: {
     alignItems: 'center',
-    marginVertical: 16,
+    marginVertical: 10,
   },
   timeText: {
     fontSize: 12,
+    color: '#666',
     marginBottom: 4,
+    fontFamily: Platform.OS === 'ios' ? "SUIT-Regular" : "SUIT-Regular",
   },
   weatherIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: 4,
+    marginVertical: 5,
+  },
+  weatherIcon: {
+    width: 30,
+    height: 30,
   },
   weatherText: {
     fontSize: 12,
     marginTop: 4,
+    fontFamily: Platform.OS === 'ios' ? "SUIT-Regular" : "SUIT-Regular",
   },
   rainProbText: {
     fontSize: 12,
-    color: '#4a90e2',
+    color: '#1890ff',
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? "SUIT-Regular" : "SUIT-Regular",
   },
   temperatureContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    width: '100%',
-    marginTop: 8,
-    paddingHorizontal: 10,
+    width: '60%',
+    gap: 10,
   },
   maxTempText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#e74c3c',
+    fontSize: 15,
+    color: '#ff4d4f',
+    fontFamily: Platform.OS === 'ios' ? "SUIT-Medium" : "SUIT-Medium",
   },
   minTempText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#3498db',
+    fontSize: 15,
+    color: '#1890ff',
+    fontFamily: Platform.OS === 'ios' ? "SUIT-Medium" : "SUIT-Medium",
   },
   loadingContainer: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginVertical: 8,
+    padding: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 200,
   },
   loadingText: {
     marginTop: 10,
-    fontSize: 16,
+    fontSize: 14,
+    color: '#666',
+    fontFamily: Platform.OS === 'ios' ? "SUIT-Regular" : "SUIT-Regular",
   },
   errorContainer: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginVertical: 8,
+    padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 150,
   },
   errorText: {
     marginTop: 10,
-    fontSize: 16,
-    color: '#e74c3c',
+    fontSize: 14,
+    color: '#ff4d4f',
+    fontFamily: Platform.OS === 'ios' ? "SUIT-Regular" : "SUIT-Regular",
+  },
+  amPmContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 5,
+  },
+  longTermWeatherIconContainer: {
+    marginVertical: 8,
+  },
+  longTermWeatherIcon: {
+    width: 35,
+    height: 35,
+  },
+  longTermRainProbText: {
+    fontSize: 13,
+    marginTop: 4,
+  },
+  longTermTemperatureContainer: {
+    marginTop: 6,
   },
 });
 

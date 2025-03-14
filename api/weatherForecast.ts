@@ -1,8 +1,7 @@
 import axios from 'axios';
-import { API_KEY } from '@env';
 
 // 기상청 API 인증키
-const serviceKey = API_KEY;
+const serviceKey = process.env.EXPO_PUBLIC_API_KEY || '';
 const BASE_URL = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst';
 const ULTRA_SRT_FCST_URL = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst';
 const ULTRA_SRT_NCST_URL = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst';
@@ -292,6 +291,71 @@ export const fetchUltraSrtNcst = async (nx: number, ny: number) => {
       console.error('응답 상태:', error.response.status);
     }
     return '0'; // 오류 발생 시 기본값 반환
+  }
+};
+
+/**
+ * 단기예보 API 호출 함수 (특정 날짜의 데이터만 필터링)
+ * @param nx 예보지점 X 좌표
+ * @param ny 예보지점 Y 좌표
+ * @param baseDate 발표 날짜 (YYYYMMDD)
+ * @param baseTime 발표 시각 (HHMM)
+ * @param targetDate 조회할 날짜 (YYYYMMDD)
+ * @returns 해당 날짜의 단기예보 데이터
+ */
+export const fetchVilageFcst = async (nx: number, ny: number, baseDate: string, baseTime: string, targetDate?: string) => {
+  try {
+    console.log(`단기예보 API 호출 정보: 날짜=${baseDate}, 시간=${baseTime}, 대상날짜=${targetDate}, nx=${nx}, ny=${ny}`);
+    
+    // API 호출 URL 직접 구성
+    const url = `${BASE_URL}?serviceKey=${encodeURIComponent(serviceKey)}&numOfRows=1000&pageNo=1&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${nx}&ny=${ny}`;
+    console.log('단기예보 API 호출 URL:', url);
+    
+    // API 호출
+    const response = await axios.get(url, {
+      timeout: 15000 // 15초 타임아웃 설정
+    });
+    
+    console.log('단기예보 API 응답 상태:', response.status);
+    
+    // 응답 데이터 확인
+    if (response.data && response.data.response) {
+      const header = response.data.response.header;
+      console.log('단기예보 API 응답 코드:', header.resultCode, '메시지:', header.resultMsg);
+      
+      if (header.resultCode === '00') {
+        const items = response.data.response.body.items.item;
+        console.log(`단기예보 API 응답 데이터 개수: ${items.length}개`);
+        
+        if (!items || items.length === 0) {
+          console.error('단기예보 API 응답에 데이터가 없습니다.');
+          throw new Error('단기예보 데이터가 없습니다.');
+        }
+        
+        // 특정 날짜의 데이터만 필터링
+        if (targetDate) {
+          const filteredItems = items.filter((item: any) => item.fcstDate === targetDate);
+          console.log(`${targetDate} 날짜의 데이터 개수: ${filteredItems.length}개`);
+          return filteredItems;
+        }
+        
+        return items;
+      } else {
+        console.error(`단기예보 API 오류: ${header.resultCode} - ${header.resultMsg}`);
+        throw new Error(`단기예보 API 오류: ${header.resultMsg}`);
+      }
+    } else {
+      console.error('단기예보 API 응답 형식이 올바르지 않습니다.');
+      console.error('응답 데이터:', JSON.stringify(response.data, null, 2));
+      throw new Error('단기예보 API 응답 형식이 올바르지 않습니다.');
+    }
+  } catch (error: any) {
+    console.error('단기예보 API 호출 오류:', error.message);
+    if (error.response) {
+      console.error('응답 데이터:', error.response.data);
+      console.error('응답 상태:', error.response.status);
+    }
+    throw error;
   }
 };
 
@@ -697,6 +761,7 @@ export function getWindDirectionDescription(vecValue: number): string {
 export default {
   fetchWeatherForecast,
   fetchUltraSrtNcst,
+  fetchVilageFcst,
   processWeatherData,
   formatDate,
   formatTime,

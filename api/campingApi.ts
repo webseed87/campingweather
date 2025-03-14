@@ -1,8 +1,7 @@
 import axios from 'axios';
-import { CAMPING_API_KEY } from '@env';
 
 // 공공데이터포털 API 인증키
-const API_KEY = CAMPING_API_KEY;
+const API_KEY = process.env.EXPO_PUBLIC_CAMPING_API_KEY || '';
 const BASE_URL = 'https://apis.data.go.kr/B551011/GoCamping';
 
 // 캠핑장 데이터 타입 정의

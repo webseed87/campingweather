@@ -1,5 +1,6 @@
+import { Colors } from '@/constants/Colors';
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 
 interface SimpleCalendarProps {
   onDateSelect: (date: string) => void;
@@ -69,7 +70,7 @@ const SimpleCalendar: React.FC<SimpleCalendarProps> = ({ onDateSelect }) => {
   
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>날짜 선택</Text>
+
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.datesContainer}>
         {availableDates.map((dateStr, index) => {
           const isSelected = dateStr === selectedDate;
@@ -79,7 +80,6 @@ const SimpleCalendar: React.FC<SimpleCalendarProps> = ({ onDateSelect }) => {
           // 날짜 표시 형식 변경 (MM-DD)
           const displayDate = dateStr.substring(5);
           
-          console.log('렌더링 날짜:', dateStr, isSelected ? '(선택됨)' : ''); // 디버깅용 로그 추가
           
           return (
             <TouchableOpacity
@@ -106,18 +106,12 @@ const SimpleCalendar: React.FC<SimpleCalendarProps> = ({ onDateSelect }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 5,
+    borderRadius: 10,
+    margin: 15,
   },
   title: {
     fontSize: 16,
+    fontFamily: Platform.OS === 'ios' ? "SUIT-bold" : "SUIT-Bold",
     fontWeight: '600',
     color: '#333',
     marginBottom: 15,
@@ -125,14 +119,13 @@ const styles = StyleSheet.create({
   },
   datesContainer: {
     flexDirection: 'row',
-    paddingBottom: 10, // 스크롤 영역에 패딩 추가
   },
   dateItem: {
     width: 80,
     height: 80,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15, // 간격 증가
+    marginRight: 10, // 간격 증가
     borderRadius: 12, // 더 둥근 모서리
     backgroundColor: '#f5f5f5',
     padding: 10,
@@ -140,16 +133,14 @@ const styles = StyleSheet.create({
     borderColor: '#e0e0e0',
   },
   selectedDateItem: {
-    backgroundColor: '#4a90e2',
+    backgroundColor: Colors.blue300,
     borderColor: '#3a80d2', // 선택된 항목의 테두리 색상 변경
-    shadowColor: '#4a90e2',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+
   },
   dateText: {
     fontSize: 18, // 글자 크기 증가
+    fontFamily: Platform.OS === 'ios' ? "SUIT-bold" : "SUIT-Bold",
+
     fontWeight: '600', // 더 굵게
     color: '#333',
     marginBottom: 5,

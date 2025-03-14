@@ -1,15 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
-  SafeAreaView,
   View,
   Text,
   TouchableOpacity,
-  ImageBackground,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import CampingSearch from "../components/CampingSearch";
 import WeatherForecast from "../components/WeatherForecast";
 import DateSelector from "../components/DateSelector";
+import { Colors } from "@/constants/Colors";
+import SeasonalBackground from "../components/SeasonalBackground";
 
 interface SelectedCamping {
   name: string;
@@ -17,6 +18,8 @@ interface SelectedCamping {
   ny: number;
   date: string;
   address?: string;
+  landRegId?: string;
+  taRegId?: string;
 }
 
 export default function CampingScreen() {
@@ -28,9 +31,11 @@ export default function CampingScreen() {
     campingName: string,
     nx: number,
     ny: number,
-    address?: string
+    address?: string,
+    landRegId?: string,
+    taRegId?: string
   ) => {
-    console.log("캠핑장 선택 완료:", campingName, nx, ny, address);
+
     // 캠핑장은 날짜 선택이 없으므로 오늘 날짜를 기본값으로 사용
     const today = new Date().toISOString().split("T")[0];
     setSelectedCamping({
@@ -39,13 +44,14 @@ export default function CampingScreen() {
       ny,
       date: today,
       address,
+      landRegId,
+      taRegId,
     });
     setShowWeather(true);
   };
 
   // 날짜 선택 처리
   const handleDateSelect = (date: string) => {
-    console.log("선택된 날짜:", date);
     if (selectedCamping) {
       setSelectedCamping({
         ...selectedCamping,
@@ -61,126 +67,93 @@ export default function CampingScreen() {
   };
 
   return (
-    <ImageBackground
-      source={require("../../assets/images/winter_bg.png")}
-      style={styles.backgroundImage}
-      resizeMode="cover"
-    >
-      <SafeAreaView style={styles.container}>
-        {!showWeather ? (
-          <View style={styles.content}>
-            <CampingSearch onCampingSelected={handleCampingSelected} />
-          </View>
-        ) : (
-          <View style={styles.content}>
-            <View style={styles.campingInfo}>
-              <Text style={styles.campingName}>{selectedCamping?.name}</Text>
-              {selectedCamping?.address && (
-                <Text style={styles.campingAddress}>
-                  {selectedCamping.address}
-                </Text>
-              )}
-              {showWeather && (
-                <TouchableOpacity
-                  style={styles.backButton}
-                  onPress={handleGoBack}
-                >
-                  <Text style={styles.backButtonText}>검색으로</Text>
-                </TouchableOpacity>
-              )}
+    <View style={styles.container}>
+      <SeasonalBackground>
+        <SafeAreaView style={styles.safeArea}>
+          {!showWeather ? (
+            <View style={styles.content}>
+              <CampingSearch onCampingSelected={handleCampingSelected} />
             </View>
+          ) : (
+            <View style={styles.content}>
+              <View style={styles.campingInfo}>
+                <Text style={styles.campingName}>{selectedCamping?.name}</Text>
+                {selectedCamping?.address && (
+                  <Text style={styles.campingAddress}>
+                    {selectedCamping.address}
+                  </Text>
+                )}
+                {showWeather && (
+                  <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={handleGoBack}
+                  >
+                    <Text style={styles.backButtonText}>다시 선택</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
 
-            {/* 날짜 선택 컴포넌트 */}
-            <View style={styles.dateContainer}>
-              <DateSelector
-                onDateSelect={handleDateSelect}
-                initialDate={selectedCamping?.date}
-              />
-            </View>
+              {/* 날짜 선택 컴포넌트 */}
+              <View style={styles.dateContainer}>
+                <DateSelector
+                  onDateSelect={handleDateSelect}
+                  initialDate={selectedCamping?.date}
+                />
+              </View>
 
-            <View style={styles.weatherInfoContainer}>
-              <Text style={styles.dateInfo}>
-                {selectedCamping?.date
-                  ? new Date(selectedCamping.date).toLocaleDateString("ko-KR", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                      weekday: "long",
-                    })
-                  : ""}
-              </Text>
-              <WeatherForecast
-                nx={selectedCamping?.nx || 0}
-                ny={selectedCamping?.ny || 0}
-                locationName={selectedCamping?.name || ""}
-                selectedDate={selectedCamping?.date || ""}
-              />
+              <View style={styles.weatherInfoContainer}>
+                <WeatherForecast
+                  nx={selectedCamping?.nx || 0}
+                  ny={selectedCamping?.ny || 0}
+                  locationName={selectedCamping?.name || ""}
+                  selectedDate={selectedCamping?.date || ""}
+                  landRegId={selectedCamping?.landRegId}
+                  taRegId={selectedCamping?.taRegId}
+                />
+              </View>
             </View>
-          </View>
-        )}
-      </SafeAreaView>
-    </ImageBackground>
+          )}
+        </SafeAreaView>
+      </SeasonalBackground>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  backgroundImage: {
-    flex: 1,
-    width: "100%",
-    height: "100%",
-  },
   container: {
     flex: 1,
-    backgroundColor: "transparent", // 완전 투명 배경으로 변경
   },
-  header: {
-    padding: 15,
-    backgroundColor: "#4a90e2",
-    alignItems: "center",
-    position: "relative",
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#fff",
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#e6f0ff",
-    marginTop: 4,
+  safeArea: {
+    flex: 1,
+    paddingTop: 30, // 상태 표시줄 높이만큼 패딩 추가
   },
   backButton: {
     position: "absolute",
     right: 15,
-    top: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    top: 25,
+    backgroundColor: Colors.blue200,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 8,
   },
   backButtonText: {
-    color: "#fff",
-    fontWeight: "bold",
+    fontSize: 13,
+    color: Colors.white,
+    fontFamily: "SUIT-regular",
   },
   content: {
     flex: 1,
   },
   campingInfo: {
-    padding: 16,
-    backgroundColor: "#fff",
-    marginBottom: 8,
+    padding: 15,
+    backgroundColor: Colors.whitebox,
     borderRadius: 8,
-    marginHorizontal: 16,
+    marginHorizontal: 15,
     marginTop: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
   campingName: {
-    fontSize: 18,
-    fontWeight: "bold",
+    fontSize: 16,
+    fontFamily: "SUIT-bold",
     marginBottom: 4,
   },
   campingAddress: {
@@ -189,26 +162,24 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   dateContainer: {
-    marginHorizontal: 16,
+    marginHorizontal: 10,
     marginBottom: 8,
+    height: 90,
+    backgroundColor: 'transparent',
+    zIndex: 1,
   },
   weatherInfoContainer: {
     flex: 1,
-    marginHorizontal: 16,
   },
   dateInfo: {
     fontSize: 16,
     fontWeight: "500",
     color: "#0066cc",
     marginBottom: 8,
-    backgroundColor: "#fff",
+    backgroundColor: Colors.white,
     padding: 12,
     borderRadius: 8,
     textAlign: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    
   },
 });

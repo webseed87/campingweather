@@ -9,4 +9,6 @@ interface LocationState {
 export const useLocationStore = create<LocationState>((set) => ({
   selectedLocation: null,
   setSelectedLocation: (location: Location) => set({ selectedLocation: location }),
-})); 
+}));
+
+export default useLocationStore; 

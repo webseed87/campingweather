@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle, TextStyle, Image, ImageStyle, Platform } from 'react-native';
 import { CampingTip } from '../../types/weather';
 import campingTipIcons from '../../constants/campingTipIcons';
 import useCampingTemperature from '../../hooks/useCampingTemperature';
 import { DailyWeatherData } from '../../types/weather';
+import { Colors } from '@/constants/Colors';
 
 interface TemperatureTipProps {
   dayData: DailyWeatherData;
@@ -11,7 +12,7 @@ interface TemperatureTipProps {
 
 interface Styles {
   tipCard: ViewStyle;
-  tipIcon: TextStyle;
+  tipIcon: ImageStyle;
   tipContent: ViewStyle;
   tipTitle: TextStyle;
   tipMessage: TextStyle;
@@ -24,7 +25,7 @@ export const TemperatureTip: React.FC<TemperatureTipProps> = ({ dayData }) => {
   if (isLoading || !dayData) {
     return (
       <View style={styles.tipCard}>
-        <Text style={styles.tipIcon}>{campingTipIcons.temperature.mild}</Text>
+        <Image source={campingTipIcons.temperature.mild} style={styles.tipIcon} />
         <View style={styles.tipContent}>
           <Text style={styles.tipTitle}>온도 정보 로딩 중...</Text>
           <Text style={styles.tipMessage}>잠시만 기다려주세요.</Text>
@@ -43,7 +44,7 @@ export const TemperatureTip: React.FC<TemperatureTipProps> = ({ dayData }) => {
   
   // 온도에 따른 메시지 설정
   if (minTempValue !== null) {
-    if (minTempValue <= -10) {
+    if (minTempValue <= -12) {
       tempTip = {
         icon: campingTipIcons.temperature.verycold,
         title: `혹한기 캠핑 예상 (최저 ${minTempValue}°C)`,
@@ -74,14 +75,10 @@ export const TemperatureTip: React.FC<TemperatureTipProps> = ({ dayData }) => {
     }
   }
 
-  // 최고 온도 정보 추가
-  if (maxTempValue !== null) {
-    tempTip.title += `, 최고 ${maxTempValue}°C`;
-  }
-
+ 
   return (
     <View style={[styles.tipCard, tempTip.style]}>
-      <Text style={styles.tipIcon}>{tempTip.icon}</Text>
+      <Image source={tempTip.icon} style={styles.tipIcon} />
       <View style={styles.tipContent}>
         <Text style={styles.tipTitle}>{tempTip.title}</Text>
         <Text style={styles.tipMessage}>{tempTip.message}</Text>
@@ -93,18 +90,15 @@ export const TemperatureTip: React.FC<TemperatureTipProps> = ({ dayData }) => {
 const styles = StyleSheet.create<Styles>({
   tipCard: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 16,
+    backgroundColor: Colors.whitebox,
+    borderRadius: 10,
+    padding: 15,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.5,
-    elevation: 2,
+ 
   },
   tipIcon: {
-    fontSize: 36,
+    width: 36,
+    height: 36,
     marginRight: 16,
   },
   tipContent: {
@@ -112,12 +106,14 @@ const styles = StyleSheet.create<Styles>({
   },
   tipTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    color: Colors.gary600,
+    fontFamily: Platform.OS === 'ios' ? "SUIT-bold" : "SUIT-Bold",
     marginBottom: 4,
   },
   tipMessage: {
     fontSize: 14,
-    color: '#666',
+    color: Colors.gary500,
+    fontFamily: Platform.OS === 'ios' ? "SUIT-regular" : "SUIT-Regular",
   },
 });
 

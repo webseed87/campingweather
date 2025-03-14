@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import weatherService from '../services/weatherService';
 import { Alert } from 'react-native';
 import { ProcessedWeatherData, WeatherDataHookResult } from '../types/weather';
+import * as midTermForecast from '../../api/midTermForecast';
 
 // 날씨 데이터 캐시 (메모리에 저장)
 interface WeatherCache {
@@ -34,14 +35,17 @@ const logCacheStatus = (cacheKey: string) => {
  * 날씨 데이터를 가져오는 커스텀 훅
  * @param nx 예보지점 X 좌표
  * @param ny 예보지점 Y 좌표
+ * @param landRegId 육상 중기예보 지역 코드 (선택적)
+ * @param taRegId 기온 중기예보 지역 코드 (선택적)
  * @returns 날씨 데이터 및 관련 상태
  */
-export function useWeatherData(nx: number, ny: number): WeatherDataHookResult {
+export function useWeatherData(nx: number, ny: number, landRegId?: string, taRegId?: string): WeatherDataHookResult {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const queryClient = useQueryClient();
   
-  // 캐시 키 생성
-  const cacheKey = `weather_${nx}_${ny}`;
+  // 캐시 키 생성 (중기예보 지역 코드 포함)
+  const cacheKey = `weather_${nx}_${ny}${landRegId ? `_${landRegId}` : ''}${taRegId ? `_${taRegId}` : ''}`;
   
   // 캐시 유효성 확인
   const isCacheValid = useCallback(() => {
@@ -55,7 +59,6 @@ export function useWeatherData(nx: number, ny: number): WeatherDataHookResult {
   
   // 날씨 데이터 가져오기
   const fetchWeatherData = useCallback(async () => {
-    console.log(`날씨 데이터 가져오기 시작 (nx=${nx}, ny=${ny})`);
     
     // 캐시가 유효하면 캐시된 데이터 반환
     if (isCacheValid()) {
@@ -64,23 +67,34 @@ export function useWeatherData(nx: number, ny: number): WeatherDataHookResult {
     }
     
     try {
-      // API에서 데이터 가져오기
-      const data = await weatherService.fetchWeatherForecast(nx, ny);
+      // API에서 데이터 가져오기 (nx, ny를 문자열로 변환)
+      const data = await weatherService.fetchWeatherForecast(nx.toString(), ny.toString());
+      
+      // 중기예보 데이터 가져오기 (지역 코드가 있는 경우)
+      let midTermData = null;
+      if (landRegId && taRegId) {
+        try {
+          midTermData = await midTermForecast.fetchMidForecastCombined(landRegId, taRegId);
+          console.log('중기예보 데이터 가져오기 완료:', midTermData);
+        } catch (midTermError) {
+          console.error('중기예보 데이터 가져오기 오류:', midTermError);
+          // 중기예보 데이터 오류는 전체 데이터 가져오기를 실패시키지 않음
+        }
+      }
       
       // 캐시 업데이트
       weatherCache[cacheKey] = {
-        data,
+        data: midTermData ? [...data, { midTermData }] : data,
         timestamp: Date.now(),
-        processedData: weatherService.processWeatherData(data)
+        processedData: weatherService.processWeatherData(data, midTermData)
       };
       
-      console.log(`날씨 데이터 가져오기 완료 (${data.length}개 항목)`);
-      return data;
+      return weatherCache[cacheKey].data;
     } catch (error) {
       console.error('날씨 데이터 가져오기 오류:', error);
       throw error;
     }
-  }, [nx, ny, cacheKey, isCacheValid]);
+  }, [nx, ny, landRegId, taRegId, cacheKey, isCacheValid]);
   
   // 처리된 데이터 가져오기
   const getProcessedData = useCallback((): ProcessedWeatherData[] => {
@@ -100,7 +114,6 @@ export function useWeatherData(nx: number, ny: number): WeatherDataHookResult {
   
   // 좌표가 변경될 때 데이터 다시 가져오기
   useEffect(() => {
-    console.log(`좌표 변경됨: nx=${nx}, ny=${ny}`);
     refetch();
   }, [nx, ny, refetch]);
   
@@ -115,7 +128,6 @@ export function useWeatherData(nx: number, ny: number): WeatherDataHookResult {
       await refetch();
       setLastUpdated(new Date());
     } catch (error) {
-      console.error('새로고침 오류:', error);
       Alert.alert('오류', '날씨 정보를 새로고침하는데 실패했습니다.');
     } finally {
       setIsRefreshing(false);
@@ -126,7 +138,6 @@ export function useWeatherData(nx: number, ny: number): WeatherDataHookResult {
   useEffect(() => {
     if (!isLoading && !isError && data) {
       setLastUpdated(new Date());
-      console.log('날씨 데이터 로드 완료');
     }
   }, [data, isLoading, isError]);
   
@@ -144,4 +155,7 @@ export function useWeatherData(nx: number, ny: number): WeatherDataHookResult {
     lastUpdated,
     refresh: handleRefresh
   };
-} 
+}
+
+// 기본 내보내기 추가
+export default useWeatherData; 
